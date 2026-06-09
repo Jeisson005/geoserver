@@ -1,0 +1,131 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: postgis_db
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+      - ./scripts/init-pgbouncer.sql:/docker-entrypoint-initdb.d/init-pgbouncer.sql:ro
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE}
+      - -c
+      - work_mem=${POSTGRES_WORK_MEM}
+      - -c
+      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM}
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS}
+      - -c
+      - wal_buffers=${POSTGRES_WAL_BUFFERS}
+      - -c
+      - max_wal_size=${POSTGRES_MAX_WAL_SIZE}
+      - -c
+      - checkpoint_timeout=${POSTGRES_CHECKPOINT_TIMEOUT}
+      - -c
+      - autovacuum_naptime=${POSTGRES_AUTOVACUUM_NAPTIME}
+      - -c
+      - autovacuum_max_workers=${POSTGRES_AUTOVACUUM_MAX_WORKERS}
+      - -c
+      - autovacuum_vacuum_scale_factor=${POSTGRES_AUTOVACUUM_VACUUM_SCALE_FACTOR}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "postgres_db_{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          cpus: '${POSTGRES_CPUS}'
+          memory: ${POSTGRES_MEM_LIMIT}
+        reservations:
+          cpus: '${POSTGRES_CPUS_RESERVATION}'
+          memory: ${POSTGRES_MEM_RESERVATION}
+    restart: unless-stopped
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.1-p0
+    container_name: pgbouncer_db
+    env_file:
+      - .env
+    depends_on:
+      - postgis
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "${POSTGRES_BIND_IP}:${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "postgres_pgbouncer_{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          cpus: '${PGBOUNCER_CPUS}'
+          memory: ${PGBOUNCER_MEM_LIMIT}
+        reservations:
+          cpus: '${PGBOUNCER_CPUS_RESERVATION}'
+          memory: ${PGBOUNCER_MEM_RESERVATION}
+    restart: unless-stopped
+
+  geoserver:
+    image: docker.osgeo.org/geoserver:2.28.4
+    container_name: geoserver_app
+    ports:
+      - "${GEOSERVER_PORT}:8080"
+    environment:
+      - SKIP_DEMO_DATA=false
+      - GEOSERVER_ADMIN_USER=${GEOSERVER_ADMIN_USER}
+      - GEOSERVER_ADMIN_PASSWORD=${GEOSERVER_ADMIN_PASSWORD}
+      - JAVA_OPTS=-Xms256m -Xmx512m -XX:MaxRAMPercentage=75.0 -XX:SoftRefLRUPolicyMSPerMB=36000
+      - POSTGRES_JNDI_ENABLED=true
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USERNAME=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - geoserver_data:/opt/geoserver_data
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "geoserver_{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          cpus: '${GEOSERVER_CPUS}'
+          memory: ${GEOSERVER_MEM_LIMIT}
+        reservations:
+          cpus: '${GEOSERVER_CPUS_RESERVATION}'
+          memory: ${GEOSERVER_MEM_RESERVATION}
+    restart: unless-stopped
+
+volumes:
+  postgis_data:
+  geoserver_data:
