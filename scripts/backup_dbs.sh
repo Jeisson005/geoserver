@@ -9,10 +9,10 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
+POSTGRES_USER=$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2- | tr -d '"'\' | tr -d '\r' || true)
+BACKUP_DIR=$(grep -E '^BACKUP_DIR=' .env | cut -d= -f2- | tr -d '"'\' | tr -d '\r' || true)
+RETENTION_DAYS=$(grep -E '^RETENTION_DAYS=' .env | cut -d= -f2- | tr -d '"'\' | tr -d '\r' || true)
+BACKUP_EXCLUDE_DBS=$(grep -E '^BACKUP_EXCLUDE_DBS=' .env | cut -d= -f2- | tr -d '"'\' | tr -d '\r' || true)
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-# Load env vars to get user/db
+# Load env vars safely to get user/db without executing special characters
 if [ -f .env ]; then
-  set -a; source .env; set +a
+  POSTGRES_USER=$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2- | tr -d '"'\' | tr -d '\r' || true)
+  POSTGRES_DB=$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2- | tr -d '"'\' | tr -d '\r' || true)
 fi
 
 # Ensure the pgbouncer directory exists and userlist.txt is a file, not a directory
